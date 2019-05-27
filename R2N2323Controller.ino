@@ -76,7 +76,7 @@ void setup() {
   Serial.println(myi2c);
   
   Wire.begin(myi2c);  // Start I2C communication Bus as a Slave (Device Number 9)
-  Wire.onReceive(receivei2cEvent); // routine to call/run when we receive an i2c command
+  Wire.onReceive(ReceiveI2CEvent); // routine to call/run when we receive an i2c command
 }
 
 
@@ -109,43 +109,32 @@ void loop() {
 
 }
 
-void receivei2cEvent() {
-  i2cCommand = Wire.read();    // receive transmission in its entirety;  we assume it to be valid (0 or 1 or 2) and we aren't doign any validation for now
+//
+// ReceiveI2CEvent - detects incoming I2C data and updates latest stance target request when received
+//
+void ReceiveI2CEvent() {
+  i2cCommand = Wire.read();    // receive transmission in its entirety;  we assume it to be valid (0 or 1 or 2) and we aren't doing any validation for now
   Serial.print("Received I2C command of ");
   Serial.println(i2cCommand); 
   // process stance target
   StanceTarget = i2cCommand;
+  // NOTE:  May want to add both validation of the data and a timer to throw out any rapid changes from the I2C bus
 }
 
-//---------------------------------------------------------Read RC--------------------
+//
+// ReadInputs - records the current position data from the position sensors
+//
 void ReadInputs() {     //this reads our switch inputs
    TiltUp = digitalRead(TiltUpPin);
    TiltDn = digitalRead(TiltDnPin);
    LegUp = digitalRead(LegUpPin);
    LegDn = digitalRead(LegDnPin);
-
-//-----------------------------------------------------------RC Radio master switch
-//a toggle switch input from the rc reciever is 1000 when off, and 2000 when on. The following line says that if
-// the toggle switch is on (aux1)  AND the joystick (aux 2) is near the ends of the travel will anything be triggered. 
-// just safer than a stick that can be bumped
-// And even then it is not a command as much as a wish. 
-
-   // NEED TO MODIFY ALL OF THIS TO LISTEN FOR I2C EVENTS
-
-/*    if ((Aux1 >= 1800)&& (Aux2 <= 1100)){
-    StanceTarget = 2;
-  }
-   if ((Aux1 >= 1800)&& (Aux2 >= 1800)){
-    StanceTarget = 1;
-   
-  }  */
 }
 
 
 //------------------------------------------------Display Values-----------------------
 // a bunch of serial display info for debugging
 void DisplayStatus() {
-  
   Serial.print("  Tilt Up  ");
   Serial.print(TiltUp);
   Serial.print("  Tilt Down  ");
