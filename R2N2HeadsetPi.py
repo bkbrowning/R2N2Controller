@@ -2,21 +2,60 @@
 R2N2HeadsetPi
 -
 A RaspberryPi application that will display the resulting menu sets from our R2 controller system.  The intent is to use the
-  RaspberryPi to drive a heads-up display that will show an 720p HDMI driven picture...hence the Pi controller.  Also forms
-  the basis for a new control system...more to come on that one!
+  RaspberryPi to drive a heads-up display that will show an 720p HDMI driven picture...hence the Pi controller.  The RaspberryPi
+  Zero W is attached to an Adafruit OLED RFM69 radio through the use of the Adafruit RFM69HCW Transceiver Radio Bonnet 915MHz.
+
+Menu changes are sent from the R2N2BodyFeather and this RPi is used, for now, to just control display to an HDMI driven heads up
+  display unit.
   
 --- Version notes ---
   -v0.1 - Initial version to configure and test the display components of the menu system
+  -v0.2 - Added radio handling
 """
 
 # imports
-import tkinter as tk
-import tkinter.font as tkFont
+import tkinter as tk                                # to establish the user interface
+import tkinter.font as tkFont                       # to use the tkinter fonts
+from digitalio import DigitalInOut, Direction, Pull # to control the IO pins on the PiZero board
+import board                                        # allows reference to board's components by logical name
+import adafruit_ssd1306                             # Import the SSD1306 module for the onboard OLED screen
+import adafruit_rfm69                               # Import the RFM69 radio module
 
-# Set default font size...which will adjust later based on window size
-font_size = -12
+#############################################
+# Board physical device setup
+#############################################
 
-# Declare global variables
+# The Adafruit Radio Bonnet has three external buttons that we can use to drive inputs.  Enabling those three buttons here
+# Button A function
+btnA = DigitalInOut(board.D5)    # Connected to board's pin D5
+btnA.direction = Direction.INPUT
+btnA.pull = Pull.UP
+# Button B function
+btnB = DigitalInOut(board.D6)    # Connected to board's pin D6
+btnB.direction = Direction.INPUT
+btnB.pull = Pull.UP
+# Button C function
+btnC = DigitalInOut(board.D12)   # Connected to board's pin D12
+btnC.direction = Direction.INPUT
+btnC.pull = Pull.UP
+
+# The Adafruit Radio Bonnet has a radio transmitter/receiver that we use to communicate to/from R2's other controllers
+SPI = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+CS = DigitalInOut(board.CE1)
+RESET = DigitalInOut(board.D25)
+FREQ = 915.0
+rfm69 = adafruit_rfm69.RFM69(SPI, CS, RESET, FREQ)
+rfm69.encryption_key = b'\x01\x02\x03\x04\x05\x06\x07\x08\x01\x02\x03\x04\x05\x06\x07\x08'
+print('Radio initialized!  Waiting on receive...')
+
+##############################################
+
+
+##############################################
+# GLOBAL VARIABLES
+##############################################
+menuPage = None
+menuItem = None
 menuPageNum = None
 menuPageTitle = None
 menuPageItem0 = None
@@ -28,10 +67,11 @@ menuPageItem5 = None
 menuPageItem6 = None
 menuPageItem7 = None
 fullscreen = False
+prev_packet = None
+nulllines = 0
+font_size = -12      # Set default font size...which will adjust later based on window size
+##############################################
 
-# variables for iterating
-menuPage = None
-menuItem = None
 
 ##############################################
 # CLASSES
@@ -187,8 +227,31 @@ root.bind('<Configure>', resize_font)
 label_menuPageItem6.flash(0)
 label_menuPageItem7.flash(16)
 
-# start with window as fullscreen and run the loop
-#toggle_fullscreen
-root.mainloop()
+#############################################
+# MAIN LOOP
+#############################################
+while True:
+    packet = None
+    
+    # Check for the receipt of a new packet on the radio
+    packet = rfm69.receive()
+    if packet is None:
+        # do nothing for now
+        nulllines = nulllines + 1
+    else:
+        #display the packet text and time since last receive event
+        prev_packet = packet
+        packet_text = str(prev_packet, "utf-8")
+        print('RX: ' + packet_text + ' in time: ' + str(nulllines))
+        
+    # Check for a local button press
+    if not btnA.value:
+        print('Button A pressed')
+    if not btnB.value:
+        print('Button B pressed')
+    if not btnC.value:
+        print('Button C pressed')
 
-
+    # Update the tk window
+    tk.update_idletasks()
+    tk.update()
