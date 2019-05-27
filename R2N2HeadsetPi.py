@@ -102,7 +102,12 @@ menuPageItem7 = tk.StringVar()
 
 menuPage = 6
 
-# temporarily, set the values to specific data
+# menuData is a multi-dimensional list that contains the detailed data to be displayed in menu system
+#   COL0 = menu number
+#   COL1 = menu title
+#   COL2 - COL9 = menu choice values
+# NOTE:  This initial set of data was originally created by Kevin Holme for his R2 control system.  It has been modified
+#   to reflect the features of my specific R2 droid
 menuData = [
     ["10",  "Random Sounds", "R Whistle",    "R Sad",            "R Chat",      "R Ack",        "R Razz",         "R Scream",         "R Alarm",        "R Hum",           "10"],
     ["20",  "Front Body",    "Open All",     "Wave 1",           "Wave 3",      "Alt 1",        "Close All",      "Wave 2",           "Wave 4",         "Alt 2",           "20"],
