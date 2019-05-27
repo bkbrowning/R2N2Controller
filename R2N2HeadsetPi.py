@@ -16,6 +16,7 @@ Menu changes are sent from the R2N2BodyFeather and this RPi is used, for now, to
 # imports
 import tkinter as tk                                # to establish the user interface
 import tkinter.font as tkFont                       # to use the tkinter fonts
+import busio
 from digitalio import DigitalInOut, Direction, Pull # to control the IO pins on the PiZero board
 import board                                        # allows reference to board's components by logical name
 import adafruit_ssd1306                             # Import the SSD1306 module for the onboard OLED screen
@@ -253,5 +254,5 @@ while True:
         print('Button C pressed')
 
     # Update the tk window
-    tk.update_idletasks()
-    tk.update()
+    root.update_idletasks()
+    root.update()
