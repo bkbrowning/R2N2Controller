@@ -4,6 +4,9 @@ R2N2HeadsetPi
 A RaspberryPi application that will display the resulting menu sets from our R2 controller system.  The intent is to use the
   RaspberryPi to drive a heads-up display that will show an 720p HDMI driven picture...hence the Pi controller.  Also forms
   the basis for a new control system...more to come on that one!
+  
+--- Version notes ---
+  -v0.1 - Initial version to configure and test the display components of the menu system
 """
 
 # imports
