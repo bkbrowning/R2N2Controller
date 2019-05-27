@@ -1,8 +1,9 @@
 """
 R2N2HeadsetPi
 -
-A RaspberryPi application that will display the resulting menu sets from our R2 controller system.  The intent is to use the RaspberryPi to
-drive a heads-up display that will show an 720p HDMI driven picture...hence the Pi controller.  Also forms the basis for a new control system...more to come on that one!
+A RaspberryPi application that will display the resulting menu sets from our R2 controller system.  The intent is to use the
+  RaspberryPi to drive a heads-up display that will show an 720p HDMI driven picture...hence the Pi controller.  Also forms
+  the basis for a new control system...more to come on that one!
 """
 
 # imports
@@ -29,6 +30,10 @@ fullscreen = False
 menuPage = None
 menuItem = None
 
+##############################################
+# CLASSES
+##############################################
+
 # extended the tk.Label class to add a flashing version
 # swaps foreground and background colors every 1000ms for a period of 30 cycles
 class FlashableLabel(tk.Label):
@@ -41,7 +46,9 @@ class FlashableLabel(tk.Label):
             self.after(1000,self.flash, count)
 
 ##############################################
-# FUNCTIONS
+
+##############################################
+# LOCAL FUNCTIONS
 ##############################################
 
 # toggle_fullscreen = toggles screen from full to windowed
