@@ -1,19 +1,20 @@
 /*
  * R2N2323Controller.ino
  *
- * From Kevin Holme:
- * this is the code I used when I took my bare 3-2-3 frame to R2LA.  
- * My goal here was to make as simple a system as possible with enough safeguards 
- * as to not function, rather than faceplant when something goes wrong. 
- * Only 4 limit switches, up and down for both tilt and center foot.  If it is not in one of those 2 positions , nothing works. 
+ * Based heavily on the original 323 controller code written by Kevin Holme.  Original comments from Kevin:
+ *   this is the code I used when I took my bare 3-2-3 frame to R2LA.  
+ *   My goal here was to make as simple a system as possible with enough safeguards 
+ *   as to not function, rather than faceplant when something goes wrong. 
+ *   Only 4 limit switches, up and down for both tilt and center foot.  If it is not in one of those 2 positions , nothing works. 
  * 
- * triggering was accomplished by using the spring loaded joystick  on an rc radio for up and down, with a toggle switch on the radio as a master switch. 
+ *   triggering was accomplished by using the spring loaded joystick  on an rc radio for up and down, with a toggle switch on the radio as a master switch. 
  * 
- * This was written for a Pro Mini. But that was because I had one.  Any arduino will do.
+ *   This was written for a Pro Mini. But that was because I had one.  Any arduino will do.
  *
+ *---------------------------------------------------------------------------------------------
  * Versioning
- *   - 0.1 - Initial version updated by Brent Browning.  Removed inputs from radio controller and replaced with I2C inputs
-
+ *   - 0.1 - Initial version updated by Brent Browning.  Organized code and modified some syntax and arrangements for personal clarity.
+ *   - 0.2 - Removed inputs from radio controller and replaced with I2C inputs.  Triggering from I2C within my droid configuration
  */
 
 
