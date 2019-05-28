@@ -55,7 +55,7 @@ print('Radio initialized!  Waiting on receive...')
 ##############################################
 # GLOBAL VARIABLES
 ##############################################
-menuPage = None
+menuPage = 0
 menuItem = None
 menuPageNum = None
 menuPageTitle = None
@@ -71,6 +71,23 @@ fullscreen = False
 prev_packet = None
 nulllines = 0
 font_size = -12      # Set default font size...which will adjust later based on window size
+
+"""
+struct messageStruct {
+  byte part1;  // menu page most significant digit (1)
+  byte part2;  // menu page least significant digit (0-9)
+  byte part3;  // menu selection value, if any (1-8)
+} RadioPacket;
+
+  RadioPacket.part1 = val1;
+  RadioPacket.part2 = val2;
+  RadioPacket.part3 = val3;
+  
+  byte packetSize = sizeof(RadioPacket);
+  byte buf[sizeof(RadioPacket)] = {0};
+  memcpy (buf, &RadioPacket, packetSize);
+
+"""
 ##############################################
 
 
@@ -150,8 +167,6 @@ menuPageItem5 = tk.StringVar()
 menuPageItem6 = tk.StringVar()
 menuPageItem7 = tk.StringVar()
 
-
-menuPage = 6
 
 # menuData is a multi-dimensional list that contains the detailed data to be displayed in menu system
 #   COL0 = menu number
@@ -244,6 +259,10 @@ while True:
         prev_packet = packet
         packet_text = str(prev_packet, "utf-8")
         print('RX: ' + packet_text + ' in time: ' + str(nulllines))
+        # separate the packet into menu page and menu item
+        menuPage = packet[:2]
+        menuItem = packet[3:]
+        # NEED TO TEST THIS and then handle the flashing when an item is selected
         
     # Check for a local button press
     if not btnA.value:
