@@ -1,4 +1,4 @@
-# R2N2 Text Field Control Menu
+# R2N2 Text-based Control Menu for use with Portable RPi5
 
 import time
 import sys
