@@ -26,6 +26,7 @@ DOME_NODE = 40
 ACTION_SERVO_GROUP_MOVE = 2
 ACTION_DOME_ALL_OPEN = 5
 ACTION_DOME_ALL_CLOSE = 6
+ACTION_DOME_WAVE = 7
 ACTION_STEALTH_SOUND = 0x30
 
 GROUP_ALL_SERVOS = 255
@@ -202,6 +203,10 @@ def payload_dome_close():
     return bytes([ACTION_DOME_ALL_CLOSE, GROUP_ALL_SERVOS, SERVO_POS_CLOSED, 0])
 
 
+def payload_dome_wave():
+    return bytes([ACTION_DOME_WAVE, GROUP_ALL_SERVOS, SERVO_POS_OPEN, 0])
+
+
 def payload_sound_bank(bank):
     return bytes([ACTION_STEALTH_SOUND, bank, 0x00, 0x00])
 
@@ -280,6 +285,11 @@ def action_dome_open():
 def action_dome_close():
     send_radio_command("Dome Close", DOME_NODE, payload_dome_close())
     state["dome"] = "closed"
+
+
+def action_dome_wave():
+    send_radio_command("Dome Wave", DOME_NODE, payload_dome_wave())
+    state["dome"] = "wave"
 
 
 def action_sound(bank):
@@ -429,7 +439,8 @@ def build_buttons(width, height):
     x = col_x[3]
     add_button("Open Dome", (x + 20, y0, col_w - 40, 86), action_dome_open, BUTTON_OPEN, "dome")
     add_button("Close Dome", (x + 20, y0 + 106, col_w - 40, 86), action_dome_close, BUTTON_CLOSE, "dome")
-    add_button("Warn + Open", (x + 20, y0 + 232, col_w - 40, 86), action_warning_all_open, BUTTON_PRESET, "dome")
+    add_button("Dome Wave", (x + 20, y0 + 232, col_w - 40, 86), action_dome_wave, BUTTON_PRESET, "dome")
+    add_button("Warn + Open", (x + 20, y0 + 338, col_w - 40, 86), action_warning_all_open, BUTTON_PRESET, "dome")
 
     by = height - bottom_h + 25
     bw = (width - margin * 2 - gap * 5) // 6

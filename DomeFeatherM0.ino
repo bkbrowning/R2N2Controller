@@ -19,9 +19,14 @@
 
 #define ACTION_DOME_ALL_OPEN   5
 #define ACTION_DOME_ALL_CLOSE  6
+#define ACTION_DOME_WAVE       7
 
 #define SERVO_MOVE_TIME_MS 700
 #define BETWEEN_SERVO_DELAY_MS 120
+
+#define DOME_WAVE_OPEN_STAGGER_MS   (SERVO_MOVE_TIME_MS / 2)
+#define DOME_WAVE_CLOSE_DELAY_MS    SERVO_MOVE_TIME_MS
+#define DOME_WAVE_SETTLE_MS         80
 
 RH_RF69 rf69(RFM69_CS, RFM69_INT);
 RHReliableDatagram manager(rf69, DOME_RADIO_NODE);
@@ -104,6 +109,86 @@ void moveServo(uint8_t index, bool open) {
   s.isOpen = open;
 
   delay(BETWEEN_SERVO_DELAY_MS);
+}
+
+void startServoMove(uint8_t index, bool open) {
+  if (index >= SERVO_COUNT) return;
+
+  ServoConfig &s = servos[index];
+  uint16_t targetUs = open ? s.openUs : s.closedUs;
+  uint16_t ticks = usToTicks(targetUs);
+
+  Serial.print(open ? "Wave opening " : "Wave closing ");
+  Serial.print(s.name);
+  Serial.print(" on PCA channel ");
+  Serial.print(s.channel);
+  Serial.print(" / ");
+  Serial.print(targetUs);
+  Serial.print(" us / ticks ");
+  Serial.println(ticks);
+
+  pwm.setPWM(s.channel, 0, ticks);
+  s.isOpen = open;
+}
+
+void domeWave() {
+  Serial.println();
+  Serial.println("Starting dome rolling wave animation");
+  Serial.print("Servo count: ");
+  Serial.println(SERVO_COUNT);
+  Serial.print("Open stagger ms: ");
+  Serial.println(DOME_WAVE_OPEN_STAGGER_MS);
+  Serial.print("Close delay ms: ");
+  Serial.println(DOME_WAVE_CLOSE_DELAY_MS);
+
+  bool openStarted[SERVO_COUNT];
+  bool closeStarted[SERVO_COUNT];
+  bool poweredDown[SERVO_COUNT];
+  unsigned long openStartMs[SERVO_COUNT];
+  unsigned long closeStartMs[SERVO_COUNT];
+
+  for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+    openStarted[i] = false;
+    closeStarted[i] = false;
+    poweredDown[i] = false;
+    openStartMs[i] = 0;
+    closeStartMs[i] = 0;
+  }
+
+  const unsigned long waveStartMs = millis();
+  uint8_t finishedCount = 0;
+
+  while (finishedCount < SERVO_COUNT) {
+    unsigned long now = millis();
+
+    for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+      if (!openStarted[i] && (now - waveStartMs >= (unsigned long)i * DOME_WAVE_OPEN_STAGGER_MS)) {
+        openStarted[i] = true;
+        openStartMs[i] = now;
+        startServoMove(i, true);
+      }
+
+      if (openStarted[i] && !closeStarted[i] && (now - openStartMs[i] >= DOME_WAVE_CLOSE_DELAY_MS)) {
+        closeStarted[i] = true;
+        closeStartMs[i] = now;
+        startServoMove(i, false);
+      }
+
+      if (closeStarted[i] && !poweredDown[i] && (now - closeStartMs[i] >= SERVO_MOVE_TIME_MS + DOME_WAVE_SETTLE_MS)) {
+        poweredDown[i] = true;
+        powerDown(servos[i].channel);
+        servos[i].isOpen = false;
+        finishedCount++;
+
+        Serial.print("Wave finished ");
+        Serial.println(servos[i].name);
+      }
+    }
+
+    delay(5);
+  }
+
+  Serial.println("Dome rolling wave animation complete; all wave servos closed/powered down.");
 }
 
 void openAll() {
@@ -215,6 +300,8 @@ void loop() {
         openAll();
       } else if (cmd.actionType == ACTION_DOME_ALL_CLOSE) {
         closeAll();
+      } else if (cmd.actionType == ACTION_DOME_WAVE) {
+        domeWave();
       } else {
         Serial.println("Unknown Dome command.");
       }

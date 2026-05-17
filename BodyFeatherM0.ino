@@ -35,10 +35,12 @@
 #define STEALTH_CMD_REAR_ALL_CLOSE   0x19
 #define STEALTH_CMD_DOME_ALL_OPEN    0x20
 #define STEALTH_CMD_DOME_ALL_CLOSE   0x21
+#define STEALTH_CMD_DOME_WAVE        0x22
 
 #define ACTION_SERVO_GROUP_MOVE      2
 #define ACTION_DOME_ALL_OPEN         5
 #define ACTION_DOME_ALL_CLOSE        6
+#define ACTION_DOME_WAVE             7
 #define ACTION_STEALTH_PLAY_SOUND    0x30
 
 #define GROUP_ALL_SERVOS 255
@@ -296,6 +298,11 @@ void handleStealthI2CCommand(uint8_t command) {
     case STEALTH_CMD_DOME_ALL_CLOSE:
       ok = sendCommand(DOME_RADIO_NODE, ACTION_DOME_ALL_CLOSE, GROUP_ALL_SERVOS, SERVO_POS_CLOSED);
       oledStatus("Dome Close", ok ? "Radio success" : "Radio failed", "");
+      break;
+
+    case STEALTH_CMD_DOME_WAVE:
+      ok = sendCommand(DOME_RADIO_NODE, ACTION_DOME_WAVE, GROUP_ALL_SERVOS, 0);
+      oledStatus("Dome Wave", ok ? "Radio success" : "Radio failed", "");
       break;
 
     default:
