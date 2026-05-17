@@ -608,6 +608,10 @@ def draw_ui(screen, fonts):
     return yes_rect, no_rect
 
 
+def button_center(button):
+    return button.rect.centerx, button.rect.centery
+
+
 def move_selection(dx, dy):
     global selected_index
 
@@ -615,42 +619,118 @@ def move_selection(dx, dy):
         return
 
     current = buttons[selected_index]
-    cx, cy = current.rect.center
+    cx, cy = button_center(current)
 
-    best_index = selected_index
-    best_score = None
+    # -----------------------------
+    # UP / DOWN: stay in same column
+    # -----------------------------
+    if dy != 0:
+        same_column = []
 
-    for i, b in enumerate(buttons):
-        if i == selected_index:
-            continue
+        for i, b in enumerate(buttons):
+            if i == selected_index:
+                continue
 
-        bx, by = b.rect.center
-        vx = bx - cx
-        vy = by - cy
+            bx, by = button_center(b)
 
-        if dx < 0 and vx >= 0:
-            continue
-        if dx > 0 and vx <= 0:
-            continue
-        if dy < 0 and vy >= 0:
-            continue
-        if dy > 0 and vy <= 0:
-            continue
+            # same visual column tolerance
+            if abs(bx - cx) < 90:
+                if dy < 0 and by < cy:
+                    same_column.append((cy - by, i))
+                elif dy > 0 and by > cy:
+                    same_column.append((by - cy, i))
 
-        if dx != 0:
-            primary = abs(vx)
-            secondary = abs(vy)
-        else:
-            primary = abs(vy)
-            secondary = abs(vx)
+        if same_column:
+            same_column.sort()
+            selected_index = same_column[0][1]
+            return
 
-        score = primary * 10 + secondary
+        # If moving down out of a column, jump to first bottom-row item.
+        if dy > 0:
+            bottom_items = sorted(
+                [(b.rect.y, b.rect.x, i) for i, b in enumerate(buttons) if b.group == "global"]
+            )
+            if bottom_items:
+                selected_index = bottom_items[0][2]
+            return
 
-        if best_score is None or score < best_score:
-            best_score = score
-            best_index = i
+        # If moving up from bottom row, go to nearest item above in same-ish x range.
+        if dy < 0 and current.group == "global":
+            candidates = []
 
-    selected_index = best_index
+            for i, b in enumerate(buttons):
+                if b.group == "global":
+                    continue
+
+                bx, by = button_center(b)
+                if by < cy:
+                    score = abs(bx - cx) * 3 + abs(cy - by)
+                    candidates.append((score, i))
+
+            if candidates:
+                candidates.sort()
+                selected_index = candidates[0][1]
+
+            return
+
+    # -----------------------------
+    # LEFT / RIGHT: move across same row
+    # -----------------------------
+    if dx != 0:
+        same_row = []
+
+        for i, b in enumerate(buttons):
+            if i == selected_index:
+                continue
+
+            bx, by = button_center(b)
+
+            # same visual row tolerance
+            if abs(by - cy) < 90:
+                if dx < 0 and bx < cx:
+                    same_row.append((cx - bx, i))
+                elif dx > 0 and bx > cx:
+                    same_row.append((bx - cx, i))
+
+        if same_row:
+            same_row.sort()
+            selected_index = same_row[0][1]
+            return
+
+        # If there is nothing to the right on that row,
+        # jump to the top item in the next column to the right.
+        if dx > 0:
+            right_columns = []
+
+            for i, b in enumerate(buttons):
+                bx, by = button_center(b)
+                if bx > cx:
+                    right_columns.append((bx, by, i))
+
+            if right_columns:
+                # find nearest column to the right, then top item in that column
+                nearest_x = min(x for x, y, i in right_columns)
+                column_items = [(y, i) for x, y, i in right_columns if abs(x - nearest_x) < 90]
+                column_items.sort()
+                selected_index = column_items[0][1]
+            return
+
+        # If there is nothing to the left on that row,
+        # jump to the top item in the previous column to the left.
+        if dx < 0:
+            left_columns = []
+
+            for i, b in enumerate(buttons):
+                bx, by = button_center(b)
+                if bx < cx:
+                    left_columns.append((bx, by, i))
+
+            if left_columns:
+                nearest_x = max(x for x, y, i in left_columns)
+                column_items = [(y, i) for x, y, i in left_columns if abs(x - nearest_x) < 90]
+                column_items.sort()
+                selected_index = column_items[0][1]
+            return
 
 
 def activate_selected():
@@ -748,27 +828,27 @@ def main():
 
                 # Twiddler navigation only:
                 # A = left, E = right, B = up, C = down, D = select/confirm
-                if key == pygame.K_a:
+                if key in (pygame.K_a, pygame.K_LEFT):
                     if state["confirm_shutdown"] or state["confirm_exit"] or state["confirm_wifi_off"]:
                         cancel_confirm()
                     else:
                         move_selection(-1, 0)
 
-                elif key == pygame.K_e:
+                elif key in (pygame.K_e, pygame.K_RIGHT):
                     if not (state["confirm_shutdown"] or state["confirm_exit"] or state["confirm_wifi_off"]):
                         move_selection(1, 0)
 
-                elif key == pygame.K_b:
+                elif key in (pygame.K_b, pygame.K_UP):
                     if state["confirm_shutdown"] or state["confirm_exit"] or state["confirm_wifi_off"]:
                         cancel_confirm()
                     else:
                         move_selection(0, -1)
 
-                elif key == pygame.K_c:
+                elif key in (pygame.K_c, pygame.K_DOWN):
                     if not (state["confirm_shutdown"] or state["confirm_exit"] or state["confirm_wifi_off"]):
                         move_selection(0, 1)
 
-                elif key == pygame.K_d:
+                elif key in (pygame.K_d, pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                     if state["confirm_shutdown"] or state["confirm_exit"] or state["confirm_wifi_off"]:
                         result = handle_confirm_yes()
                         if result in ("exit", "shutdown"):
