@@ -1,4 +1,4 @@
-//Front Panel Feather M0
+// Front Panel Feather M0
 #include <Wire.h>
 #include <SPI.h>
 #include <RH_RF69.h>
@@ -17,8 +17,11 @@
 #define PCA9685_ADDRESS 0x40
 #define SERVO_FREQ 50
 
-#define ACTION_SERVO_MOVE       1
-#define ACTION_SERVO_GROUP_MOVE 2
+#define ACTION_SERVO_MOVE          1
+#define ACTION_SERVO_GROUP_MOVE    2
+#define ACTION_FRONT_ARM_FLAIL     8
+#define ACTION_FRONT_CHARGE_TOGGLE 9
+#define ACTION_FRONT_DATA_TOGGLE   10
 
 #define GROUP_ALL_SERVOS 255
 
@@ -27,6 +30,12 @@
 
 #define SERVO_MOVE_TIME_MS 700
 #define BETWEEN_SERVO_DELAY_MS 150
+
+#define ARM_FLAIL_MOVE_TIME_MS 300
+#define ARM_FLAIL_CYCLES       2
+
+#define CHARGE_PORT_PIN 2
+#define DATA_PANEL_PIN  6
 
 RH_RF69 rf69(RFM69_CS, RFM69_INT);
 RHReliableDatagram manager(rf69, FRONT_RADIO_NODE);
@@ -45,20 +54,21 @@ struct ServoConfig {
   const char *name;
   uint16_t openUs;
   uint16_t closedUs;
+  bool isOpen;
 };
 
 ServoConfig frontServos[] = {
-  {0,  "Upper Arm",                2300,  992},
-  {1,  "Lower Arm",                2320, 1266},
-  {2,  "Charge Port",              1286, 2150},
-  {3,  "Left Side Panel",          1500, 1020},
-  {4,  "Right Side Panel",         1247, 1950},
-  {5,  "Front Pocket",              922, 1410},
-  {6,  "Display Panel",            1130, 1870},
-  {7,  "Left Lower Panel",         1050, 1850},
-  {8,  "Right Lower Panel",        1398, 2180},
-  {9,  "Left-Center Lower Panel",   812, 1736},
-  {10, "Right-Center Lower Panel",  985, 1545}
+  {0,  "Upper Arm",                2300,  992, false},
+  {1,  "Lower Arm",                2320, 1266, false},
+  {2,  "Charge Port",              1286, 2150, false},
+  {3,  "Left Side Panel",          1500, 1020, false},
+  {4,  "Right Side Panel",         1247, 1950, false},
+  {5,  "Front Pocket",              922, 1410, false},
+  {6,  "Display Panel",            1130, 1870, false},
+  {7,  "Left Lower Panel",         1050, 1850, false},
+  {8,  "Right Lower Panel",        1398, 2180, false},
+  {9,  "Left-Center Lower Panel",   812, 1736, false},
+  {10, "Right-Center Lower Panel",  985, 1545, false}
 };
 
 const uint8_t FRONT_SERVO_COUNT = sizeof(frontServos) / sizeof(frontServos[0]);
@@ -98,19 +108,23 @@ void powerDownServo(uint8_t servoPin) {
   pwm.setPWM(servoPin, 0, 0);
 }
 
-bool moveServoByIndex(uint8_t index, uint8_t position) {
-  if (index >= FRONT_SERVO_COUNT) {
-    return false;
+int8_t findServoIndexByPin(uint8_t servoPin) {
+  for (uint8_t i = 0; i < FRONT_SERVO_COUNT; i++) {
+    if (frontServos[i].pin == servoPin) {
+      return i;
+    }
   }
+  return -1;
+}
 
-  ServoConfig s = frontServos[index];
+void startServoByIndex(uint8_t index, uint8_t position) {
+  if (index >= FRONT_SERVO_COUNT) return;
 
-  uint16_t targetUs =
-    position == SERVO_POS_OPEN ? s.openUs : s.closedUs;
-
+  ServoConfig &s = frontServos[index];
+  uint16_t targetUs = position == SERVO_POS_OPEN ? s.openUs : s.closedUs;
   uint16_t ticks = microsecondsToTicks(targetUs);
 
-  Serial.print("Moving servo ");
+  Serial.print("Starting servo ");
   Serial.print(s.pin);
   Serial.print(" - ");
   Serial.print(s.name);
@@ -122,17 +136,33 @@ bool moveServoByIndex(uint8_t index, uint8_t position) {
   Serial.println(ticks);
 
   pwm.setPWM(s.pin, 0, ticks);
+  s.isOpen = (position == SERVO_POS_OPEN);
+}
 
+bool moveServoByIndex(uint8_t index, uint8_t position) {
+  if (index >= FRONT_SERVO_COUNT) {
+    return false;
+  }
+
+  startServoByIndex(index, position);
   delay(SERVO_MOVE_TIME_MS);
-
-  powerDownServo(s.pin);
+  powerDownServo(frontServos[index].pin);
 
   Serial.print("Powered down servo ");
-  Serial.println(s.pin);
+  Serial.println(frontServos[index].pin);
 
   delay(BETWEEN_SERVO_DELAY_MS);
-
   return true;
+}
+
+bool moveServoByPin(uint8_t servoPin, uint8_t position) {
+  int8_t index = findServoIndexByPin(servoPin);
+  if (index < 0) {
+    Serial.print("Servo pin not found: ");
+    Serial.println(servoPin);
+    return false;
+  }
+  return moveServoByIndex(index, position);
 }
 
 void moveAllServos(uint8_t position) {
@@ -145,6 +175,59 @@ void moveAllServos(uint8_t position) {
   }
 
   Serial.println("All front servo movement complete.");
+}
+
+void armFlail() {
+  Serial.println();
+  Serial.println("Starting Arm Flail: pins 0 and 1, two alternating cycles");
+
+  int8_t upperIndex = findServoIndexByPin(0);
+  int8_t lowerIndex = findServoIndexByPin(1);
+
+  if (upperIndex < 0 || lowerIndex < 0) {
+    Serial.println("Arm Flail aborted: servo pin 0 or 1 not found.");
+    return;
+  }
+
+  for (uint8_t cycle = 0; cycle < ARM_FLAIL_CYCLES; cycle++) {
+    Serial.print("Arm Flail cycle ");
+    Serial.println(cycle + 1);
+
+    startServoByIndex(upperIndex, SERVO_POS_OPEN);
+    startServoByIndex(lowerIndex, SERVO_POS_OPEN);
+    delay(ARM_FLAIL_MOVE_TIME_MS);
+
+    startServoByIndex(upperIndex, SERVO_POS_CLOSED);
+    startServoByIndex(lowerIndex, SERVO_POS_CLOSED);
+    delay(ARM_FLAIL_MOVE_TIME_MS);
+  }
+
+  powerDownServo(frontServos[upperIndex].pin);
+  powerDownServo(frontServos[lowerIndex].pin);
+  frontServos[upperIndex].isOpen = false;
+  frontServos[lowerIndex].isOpen = false;
+
+  Serial.println("Arm Flail complete; arm servos closed/powered down.");
+}
+
+void toggleServoByPin(uint8_t servoPin, const char *label) {
+  int8_t index = findServoIndexByPin(servoPin);
+  if (index < 0) {
+    Serial.print(label);
+    Serial.println(" toggle failed: servo pin not found.");
+    return;
+  }
+
+  uint8_t targetPosition = frontServos[index].isOpen ? SERVO_POS_CLOSED : SERVO_POS_OPEN;
+
+  Serial.println();
+  Serial.print(label);
+  Serial.print(" toggle: assumed current state is ");
+  Serial.print(frontServos[index].isOpen ? "OPEN" : "CLOSED");
+  Serial.print(", moving to ");
+  Serial.println(targetPosition == SERVO_POS_OPEN ? "OPEN" : "CLOSED");
+
+  moveServoByIndex(index, targetPosition);
 }
 
 void closeAllServosOnBoot() {
@@ -215,6 +298,12 @@ void loop() {
       if (cmd.actionType == ACTION_SERVO_GROUP_MOVE &&
           cmd.targetGroup == GROUP_ALL_SERVOS) {
         moveAllServos(cmd.position);
+      } else if (cmd.actionType == ACTION_FRONT_ARM_FLAIL) {
+        armFlail();
+      } else if (cmd.actionType == ACTION_FRONT_CHARGE_TOGGLE) {
+        toggleServoByPin(CHARGE_PORT_PIN, "Charge Bay");
+      } else if (cmd.actionType == ACTION_FRONT_DATA_TOGGLE) {
+        toggleServoByPin(DATA_PANEL_PIN, "Data Panel");
       } else {
         Serial.println("Unknown command.");
       }

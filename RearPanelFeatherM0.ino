@@ -1,4 +1,4 @@
-# Rear Panel Feather M0
+// Rear Panel Feather M0
 #include <Wire.h>
 #include <SPI.h>
 #include <RH_RF69.h>
@@ -18,6 +18,7 @@
 #define SERVO_FREQ 50
 
 #define ACTION_SERVO_GROUP_MOVE 2
+#define ACTION_REAR_TOP_TOGGLE  11
 
 #define GROUP_ALL_SERVOS 255
 
@@ -27,10 +28,15 @@
 #define SERVO_MOVE_TIME_MS 700
 #define BETWEEN_SERVO_DELAY_MS 150
 
+#define REAR_TOP_LOCK_PIN 1
+#define REAR_TOP_DOOR_PIN 2
+
 RH_RF69 rf69(RFM69_CS, RFM69_INT);
 RHReliableDatagram manager(rf69, REAR_RADIO_NODE);
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(PCA9685_ADDRESS);
+
+bool rearTopDoorOpen = false;
 
 struct PanelCommand {
   uint8_t actionType;
@@ -44,20 +50,21 @@ struct ServoConfig {
   const char *name;
   uint16_t openUs;
   uint16_t closedUs;
+  bool isOpen;
 };
 
 ServoConfig rearServos[] = {
-  {0,  "Left Side Panel",          1240, 1950},
-  {1,  "Upper Door Lock",          1900, 1200},
-  {2,  "Upper Door",                720, 1350},
-  {3,  "Right Mid Panel",          1000, 1793},
-  {4,  "Center Mid Panel",         1247, 2186},
-  {5,  "Left Mid Panel",           1514,  720},
-  {8,  "Left Lower Panel",         1025, 1700},
-  {9,  "Right Lower Panel",        1245, 1948},
-  {10, "Right-Center Lower Panel", 1728, 1200},
-  {11, "Left-Center Lower Panel",  2320, 1590},
-  {12, "Right Side Panel",         1600,  855}
+  {0,  "Left Side Panel",          1240, 1950, false},
+  {1,  "Upper Door Lock",          1900, 1200, false},
+  {2,  "Upper Door",                720, 1350, false},
+  {3,  "Right Mid Panel",          1000, 1793, false},
+  {4,  "Center Mid Panel",         1247, 2186, false},
+  {5,  "Left Mid Panel",           1514,  720, false},
+  {8,  "Left Lower Panel",         1025, 1700, false},
+  {9,  "Right Lower Panel",        1245, 1948, false},
+  {10, "Right-Center Lower Panel", 1728, 1200, false},
+  {11, "Left-Center Lower Panel",  2320, 1590, false},
+  {12, "Right Side Panel",         1600,  855, false}
 };
 
 const uint8_t REAR_SERVO_COUNT = sizeof(rearServos) / sizeof(rearServos[0]);
@@ -97,19 +104,23 @@ void powerDownServo(uint8_t servoPin) {
   pwm.setPWM(servoPin, 0, 0);
 }
 
-bool moveServoByIndex(uint8_t index, uint8_t position) {
-  if (index >= REAR_SERVO_COUNT) {
-    return false;
+int8_t findServoIndexByPin(uint8_t servoPin) {
+  for (uint8_t i = 0; i < REAR_SERVO_COUNT; i++) {
+    if (rearServos[i].pin == servoPin) {
+      return i;
+    }
   }
+  return -1;
+}
 
-  ServoConfig s = rearServos[index];
+void startServoByIndex(uint8_t index, uint8_t position) {
+  if (index >= REAR_SERVO_COUNT) return;
 
-  uint16_t targetUs =
-    position == SERVO_POS_OPEN ? s.openUs : s.closedUs;
-
+  ServoConfig &s = rearServos[index];
+  uint16_t targetUs = position == SERVO_POS_OPEN ? s.openUs : s.closedUs;
   uint16_t ticks = microsecondsToTicks(targetUs);
 
-  Serial.print("Moving servo ");
+  Serial.print("Starting servo ");
   Serial.print(s.pin);
   Serial.print(" - ");
   Serial.print(s.name);
@@ -121,29 +132,86 @@ bool moveServoByIndex(uint8_t index, uint8_t position) {
   Serial.println(ticks);
 
   pwm.setPWM(s.pin, 0, ticks);
+  s.isOpen = (position == SERVO_POS_OPEN);
+}
 
+bool moveServoByIndex(uint8_t index, uint8_t position) {
+  if (index >= REAR_SERVO_COUNT) {
+    return false;
+  }
+
+  startServoByIndex(index, position);
   delay(SERVO_MOVE_TIME_MS);
-
-  powerDownServo(s.pin);
+  powerDownServo(rearServos[index].pin);
 
   Serial.print("Powered down servo ");
-  Serial.println(s.pin);
+  Serial.println(rearServos[index].pin);
 
   delay(BETWEEN_SERVO_DELAY_MS);
-
   return true;
 }
 
 bool moveServoByPin(uint8_t servoPin, uint8_t position) {
-  for (uint8_t i = 0; i < REAR_SERVO_COUNT; i++) {
-    if (rearServos[i].pin == servoPin) {
-      return moveServoByIndex(i, position);
-    }
+  int8_t index = findServoIndexByPin(servoPin);
+  if (index < 0) {
+    Serial.print("Servo pin not found: ");
+    Serial.println(servoPin);
+    return false;
+  }
+  return moveServoByIndex(index, position);
+}
+
+void setRearTopDoor(uint8_t position) {
+  int8_t lockIndex = findServoIndexByPin(REAR_TOP_LOCK_PIN);
+  int8_t doorIndex = findServoIndexByPin(REAR_TOP_DOOR_PIN);
+
+  if (lockIndex < 0 || doorIndex < 0) {
+    Serial.println("Rear top door sequence failed: lock or door servo not found.");
+    return;
   }
 
-  Serial.print("Servo pin not found: ");
-  Serial.println(servoPin);
-  return false;
+  Serial.println();
+
+  if (position == SERVO_POS_OPEN) {
+    Serial.println("Rear top sequence OPEN: unlock/open pin 1, then open door pin 2");
+
+    startServoByIndex(lockIndex, SERVO_POS_OPEN);
+    delay(SERVO_MOVE_TIME_MS);
+    powerDownServo(REAR_TOP_LOCK_PIN);
+
+    startServoByIndex(doorIndex, SERVO_POS_OPEN);
+    delay(SERVO_MOVE_TIME_MS);
+    powerDownServo(REAR_TOP_DOOR_PIN);
+
+    rearTopDoorOpen = true;
+  } else {
+    Serial.println("Rear top sequence CLOSE: close door pin 2 and hold, then close/lock pin 1");
+
+    startServoByIndex(doorIndex, SERVO_POS_CLOSED);
+    delay(SERVO_MOVE_TIME_MS);
+
+    // Keep the door servo powered/holding while the lock closes so the lock can catch.
+    startServoByIndex(lockIndex, SERVO_POS_CLOSED);
+    delay(SERVO_MOVE_TIME_MS);
+
+    powerDownServo(REAR_TOP_LOCK_PIN);
+    powerDownServo(REAR_TOP_DOOR_PIN);
+
+    rearTopDoorOpen = false;
+  }
+
+  rearServos[lockIndex].isOpen = (position == SERVO_POS_OPEN);
+  rearServos[doorIndex].isOpen = (position == SERVO_POS_OPEN);
+
+  delay(BETWEEN_SERVO_DELAY_MS);
+}
+
+void toggleRearTopDoor() {
+  Serial.println();
+  Serial.print("Rear Top Toggle: assumed current state is ");
+  Serial.println(rearTopDoorOpen ? "OPEN" : "CLOSED");
+
+  setRearTopDoor(rearTopDoorOpen ? SERVO_POS_CLOSED : SERVO_POS_OPEN);
 }
 
 void moveAllServos(uint8_t position) {
@@ -152,15 +220,13 @@ void moveAllServos(uint8_t position) {
   Serial.println(position == SERVO_POS_OPEN ? "OPEN" : "CLOSED");
 
   if (position == SERVO_POS_OPEN) {
-    Serial.println("Rear door sequence: unlock/open pin 1, then open door pin 2");
-    moveServoByPin(1, SERVO_POS_OPEN);
-    moveServoByPin(2, SERVO_POS_OPEN);
+    setRearTopDoor(SERVO_POS_OPEN);
   }
 
   for (uint8_t i = 0; i < REAR_SERVO_COUNT; i++) {
     uint8_t pin = rearServos[i].pin;
 
-    if (pin == 1 || pin == 2) {
+    if (pin == REAR_TOP_LOCK_PIN || pin == REAR_TOP_DOOR_PIN) {
       continue;
     }
 
@@ -168,9 +234,7 @@ void moveAllServos(uint8_t position) {
   }
 
   if (position == SERVO_POS_CLOSED) {
-    Serial.println("Rear door sequence: close door pin 2, then close/lock pin 1");
-    moveServoByPin(2, SERVO_POS_CLOSED);
-    moveServoByPin(1, SERVO_POS_CLOSED);
+    setRearTopDoor(SERVO_POS_CLOSED);
   }
 
   Serial.println("All rear servo movement complete.");
@@ -244,6 +308,8 @@ void loop() {
       if (cmd.actionType == ACTION_SERVO_GROUP_MOVE &&
           cmd.targetGroup == GROUP_ALL_SERVOS) {
         moveAllServos(cmd.position);
+      } else if (cmd.actionType == ACTION_REAR_TOP_TOGGLE) {
+        toggleRearTopDoor();
       } else {
         Serial.println("Unknown command.");
       }

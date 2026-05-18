@@ -27,6 +27,10 @@ ACTION_SERVO_GROUP_MOVE = 2
 ACTION_DOME_ALL_OPEN = 5
 ACTION_DOME_ALL_CLOSE = 6
 ACTION_DOME_WAVE = 7
+ACTION_FRONT_ARM_FLAIL = 8
+ACTION_FRONT_CHARGE_TOGGLE = 9
+ACTION_FRONT_DATA_TOGGLE = 10
+ACTION_REAR_TOP_TOGGLE = 11
 ACTION_STEALTH_SOUND = 0x30
 
 GROUP_ALL_SERVOS = 255
@@ -115,6 +119,9 @@ state = {
     "front": "unknown",
     "rear": "unknown",
     "dome": "unknown",
+    "charge_bay": "closed",
+    "data_panel": "closed",
+    "rear_top": "closed",
     "selected_sound": 7,
     "last_command": "Ready",
     "last_rx": "None",
@@ -207,6 +214,22 @@ def payload_dome_wave():
     return bytes([ACTION_DOME_WAVE, GROUP_ALL_SERVOS, SERVO_POS_OPEN, 0])
 
 
+def payload_front_arm_flail():
+    return bytes([ACTION_FRONT_ARM_FLAIL, 0x00, 0x00, 0x00])
+
+
+def payload_front_charge_toggle():
+    return bytes([ACTION_FRONT_CHARGE_TOGGLE, 2, 0x00, 0x00])
+
+
+def payload_front_data_toggle():
+    return bytes([ACTION_FRONT_DATA_TOGGLE, 6, 0x00, 0x00])
+
+
+def payload_rear_top_toggle():
+    return bytes([ACTION_REAR_TOP_TOGGLE, 2, 0x00, 0x00])
+
+
 def payload_sound_bank(bank):
     return bytes([ACTION_STEALTH_SOUND, bank, 0x00, 0x00])
 
@@ -260,21 +283,47 @@ def receive_once():
 def action_front_open():
     send_radio_command("Front Open", FRONT_NODE, payload_group_open())
     state["front"] = "open"
+    state["charge_bay"] = "open"
+    state["data_panel"] = "open"
 
 
 def action_front_close():
     send_radio_command("Front Close", FRONT_NODE, payload_group_close())
     state["front"] = "closed"
+    state["charge_bay"] = "closed"
+    state["data_panel"] = "closed"
+
+
+def action_front_arm_flail():
+    send_radio_command("Arm Flail", FRONT_NODE, payload_front_arm_flail())
+    state["status_message"] = "Sent: Arm Flail"
+
+
+def action_charge_bay_toggle():
+    send_radio_command("Charge Bay Toggle", FRONT_NODE, payload_front_charge_toggle())
+    state["charge_bay"] = "open" if state["charge_bay"] != "open" else "closed"
+
+
+def action_data_panel_toggle():
+    send_radio_command("Data Panel Toggle", FRONT_NODE, payload_front_data_toggle())
+    state["data_panel"] = "open" if state["data_panel"] != "open" else "closed"
 
 
 def action_rear_open():
     send_radio_command("Rear Open", REAR_NODE, payload_group_open())
     state["rear"] = "open"
+    state["rear_top"] = "open"
 
 
 def action_rear_close():
     send_radio_command("Rear Close", REAR_NODE, payload_group_close())
     state["rear"] = "closed"
+    state["rear_top"] = "closed"
+
+
+def action_rear_top_toggle():
+    send_radio_command("Rear Top Toggle", REAR_NODE, payload_rear_top_toggle())
+    state["rear_top"] = "open" if state["rear_top"] != "open" else "closed"
 
 
 def action_dome_open():
@@ -401,6 +450,10 @@ def wifi_button_color():
     return BUTTON_SYSTEM
 
 
+def toggle_state_color(state_key):
+    return BUTTON_OPEN if state.get(state_key) == "open" else BUTTON_CLOSE
+
+
 def build_buttons(width, height):
     buttons.clear()
 
@@ -428,13 +481,17 @@ def build_buttons(width, height):
     add_button("Play Selected", (x + 20, y0 + 7 * (button_h + inner_gap), col_w - 40, button_h), action_play_selected_sound, BUTTON_SOUND, "body")
 
     x = col_x[1]
-    add_button("Open Front", (x + 20, y0, col_w - 40, 86), action_front_open, BUTTON_OPEN, "front")
-    add_button("Close Front", (x + 20, y0 + 106, col_w - 40, 86), action_front_close, BUTTON_CLOSE, "front")
-    add_button("Wake Up", (x + 20, y0 + 232, col_w - 40, 86), action_wake_up, BUTTON_PRESET, "front")
+    add_button("Open Front", (x + 20, y0, col_w - 40, 66), action_front_open, BUTTON_OPEN, "front")
+    add_button("Close Front", (x + 20, y0 + 80, col_w - 40, 66), action_front_close, BUTTON_CLOSE, "front")
+    add_button("Arm Flail", (x + 20, y0 + 160, col_w - 40, 66), action_front_arm_flail, BUTTON_PRESET, "front")
+    add_button("Charge Bay", (x + 20, y0 + 240, col_w - 40, 66), action_charge_bay_toggle, lambda: toggle_state_color("charge_bay"), "front")
+    add_button("Data Panel", (x + 20, y0 + 320, col_w - 40, 66), action_data_panel_toggle, lambda: toggle_state_color("data_panel"), "front")
+    add_button("Wake Up", (x + 20, y0 + 400, col_w - 40, 66), action_wake_up, BUTTON_PRESET, "front")
 
     x = col_x[2]
-    add_button("Open Rear", (x + 20, y0, col_w - 40, 86), action_rear_open, BUTTON_OPEN, "rear")
-    add_button("Close Rear", (x + 20, y0 + 106, col_w - 40, 86), action_rear_close, BUTTON_CLOSE, "rear")
+    add_button("Open Rear", (x + 20, y0, col_w - 40, 76), action_rear_open, BUTTON_OPEN, "rear")
+    add_button("Close Rear", (x + 20, y0 + 92, col_w - 40, 76), action_rear_close, BUTTON_CLOSE, "rear")
+    add_button("Rear Top", (x + 20, y0 + 184, col_w - 40, 76), action_rear_top_toggle, lambda: toggle_state_color("rear_top"), "rear")
 
     x = col_x[3]
     add_button("Open Dome", (x + 20, y0, col_w - 40, 86), action_dome_open, BUTTON_OPEN, "dome")
