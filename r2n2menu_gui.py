@@ -31,6 +31,9 @@ ACTION_FRONT_ARM_FLAIL = 8
 ACTION_FRONT_CHARGE_TOGGLE = 9
 ACTION_FRONT_DATA_TOGGLE = 10
 ACTION_REAR_TOP_TOGGLE = 11
+ACTION_REAR_TOP_OPEN = 12
+ACTION_REAR_TOP_CLOSE = 13
+ACTION_STATUS_UPDATE = 0x40
 ACTION_STEALTH_SOUND = 0x30
 
 GROUP_ALL_SERVOS = 255
@@ -230,6 +233,14 @@ def payload_rear_top_toggle():
     return bytes([ACTION_REAR_TOP_TOGGLE, 2, 0x00, 0x00])
 
 
+def payload_rear_top_open():
+    return bytes([ACTION_REAR_TOP_OPEN, 2, SERVO_POS_OPEN, 0x00])
+
+
+def payload_rear_top_close():
+    return bytes([ACTION_REAR_TOP_CLOSE, 2, SERVO_POS_CLOSED, 0x00])
+
+
 def payload_sound_bank(bank):
     return bytes([ACTION_STEALTH_SOUND, bank, 0x00, 0x00])
 
@@ -259,6 +270,68 @@ def send_radio_command(label, dest, payload):
     time.sleep(COMMAND_DELAY_SECONDS)
 
 
+def apply_body_status_update(body):
+    if len(body) < 4 or body[0] != ACTION_STATUS_UPDATE:
+        return False
+
+    stealth_cmd = body[1]
+    status_value = body[2]
+    status_text = {0: "triggered", SERVO_POS_OPEN: "open", SERVO_POS_CLOSED: "closed"}.get(status_value, str(status_value))
+
+    command_labels = {
+        0x16: "Front Open",
+        0x17: "Front Close",
+        0x18: "Rear Open",
+        0x19: "Rear Close",
+        0x20: "Dome Open",
+        0x21: "Dome Close",
+        0x22: "Dome Wave",
+        0x23: "Arm Flail",
+        0x24: "Charge Bay Toggle",
+        0x25: "Data Panel Toggle",
+        0x26: "Rear Top Toggle",
+        0x27: "Rear Top Open",
+        0x28: "Rear Top Close",
+    }
+
+    if stealth_cmd == 0x16:
+        state["front"] = "open"
+        state["charge_bay"] = "open"
+        state["data_panel"] = "open"
+    elif stealth_cmd == 0x17:
+        state["front"] = "closed"
+        state["charge_bay"] = "closed"
+        state["data_panel"] = "closed"
+    elif stealth_cmd == 0x18:
+        state["rear"] = "open"
+        state["rear_top"] = "open"
+    elif stealth_cmd == 0x19:
+        state["rear"] = "closed"
+        state["rear_top"] = "closed"
+    elif stealth_cmd == 0x20:
+        state["dome"] = "open"
+    elif stealth_cmd == 0x21:
+        state["dome"] = "closed"
+    elif stealth_cmd == 0x22:
+        state["dome"] = "wave"
+    elif stealth_cmd == 0x24:
+        state["charge_bay"] = "open" if state["charge_bay"] != "open" else "closed"
+    elif stealth_cmd == 0x25:
+        state["data_panel"] = "open" if state["data_panel"] != "open" else "closed"
+    elif stealth_cmd == 0x26:
+        state["rear_top"] = "open" if state["rear_top"] != "open" else "closed"
+    elif stealth_cmd == 0x27:
+        state["rear_top"] = "open"
+    elif stealth_cmd == 0x28:
+        state["rear_top"] = "closed"
+
+    label = command_labels.get(stealth_cmd, f"STEALTH 0x{stealth_cmd:02X}")
+    state["last_command"] = f"STEALTH: {label}"
+    state["status_message"] = f"STEALTH relayed: {label} ({status_text})"
+    oled("STEALTH RX", label[:21], status_text[:21])
+    return True
+
+
 def receive_once():
     pkt = rfm69.receive(timeout=0.01, with_header=True)
     if pkt is None:
@@ -276,6 +349,9 @@ def receive_once():
             f"to={header[0]} from={header[1]} id={header[2]} "
             f"flags=0x{header[3]:02X} | body={body.hex(' ')}"
         )
+
+        if header[1] == BODY_NODE and apply_body_status_update(body):
+            return
 
         oled("RX", f"from {header[1]}", f"RSSI {rfm69.rssi}")
 
@@ -324,6 +400,16 @@ def action_rear_close():
 def action_rear_top_toggle():
     send_radio_command("Rear Top Toggle", REAR_NODE, payload_rear_top_toggle())
     state["rear_top"] = "open" if state["rear_top"] != "open" else "closed"
+
+
+def action_rear_top_open():
+    send_radio_command("Rear Top Open", REAR_NODE, payload_rear_top_open())
+    state["rear_top"] = "open"
+
+
+def action_rear_top_close():
+    send_radio_command("Rear Top Close", REAR_NODE, payload_rear_top_close())
+    state["rear_top"] = "closed"
 
 
 def action_dome_open():
@@ -489,9 +575,11 @@ def build_buttons(width, height):
     add_button("Wake Up", (x + 20, y0 + 400, col_w - 40, 66), action_wake_up, BUTTON_PRESET, "front")
 
     x = col_x[2]
-    add_button("Open Rear", (x + 20, y0, col_w - 40, 76), action_rear_open, BUTTON_OPEN, "rear")
-    add_button("Close Rear", (x + 20, y0 + 92, col_w - 40, 76), action_rear_close, BUTTON_CLOSE, "rear")
-    add_button("Rear Top", (x + 20, y0 + 184, col_w - 40, 76), action_rear_top_toggle, lambda: toggle_state_color("rear_top"), "rear")
+    add_button("Open Rear", (x + 20, y0, col_w - 40, 66), action_rear_open, BUTTON_OPEN, "rear")
+    add_button("Close Rear", (x + 20, y0 + 80, col_w - 40, 66), action_rear_close, BUTTON_CLOSE, "rear")
+    add_button("Rear Top Toggle", (x + 20, y0 + 160, col_w - 40, 66), action_rear_top_toggle, lambda: toggle_state_color("rear_top"), "rear")
+    add_button("Rear Top Open", (x + 20, y0 + 240, col_w - 40, 66), action_rear_top_open, BUTTON_OPEN, "rear")
+    add_button("Rear Top Close", (x + 20, y0 + 320, col_w - 40, 66), action_rear_top_close, BUTTON_CLOSE, "rear")
 
     x = col_x[3]
     add_button("Open Dome", (x + 20, y0, col_w - 40, 86), action_dome_open, BUTTON_OPEN, "dome")

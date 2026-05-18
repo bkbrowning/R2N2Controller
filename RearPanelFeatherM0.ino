@@ -19,6 +19,8 @@
 
 #define ACTION_SERVO_GROUP_MOVE 2
 #define ACTION_REAR_TOP_TOGGLE  11
+#define ACTION_REAR_TOP_OPEN    12
+#define ACTION_REAR_TOP_CLOSE   13
 
 #define GROUP_ALL_SERVOS 255
 
@@ -310,6 +312,10 @@ void loop() {
         moveAllServos(cmd.position);
       } else if (cmd.actionType == ACTION_REAR_TOP_TOGGLE) {
         toggleRearTopDoor();
+      } else if (cmd.actionType == ACTION_REAR_TOP_OPEN) {
+        setRearTopDoor(SERVO_POS_OPEN);
+      } else if (cmd.actionType == ACTION_REAR_TOP_CLOSE) {
+        setRearTopDoor(SERVO_POS_CLOSED);
       } else {
         Serial.println("Unknown command.");
       }

@@ -19,6 +19,7 @@
 #define STEALTH_I2C_ADDR 9
 
 #define BODY_RADIO_NODE 10
+#define PI_RADIO_NODE 99
 #define FRONT_RADIO_NODE 20
 #define REAR_RADIO_NODE 30
 #define DOME_RADIO_NODE 40
@@ -40,12 +41,20 @@
 #define STEALTH_CMD_CHARGE_TOGGLE    0x24
 #define STEALTH_CMD_DATA_TOGGLE      0x25
 #define STEALTH_CMD_REAR_TOP_TOGGLE  0x26
-#define STEALTH_CMD_DOME_WAVE        0x22
+#define STEALTH_CMD_REAR_TOP_OPEN    0x27
+#define STEALTH_CMD_REAR_TOP_CLOSE   0x28
 
 #define ACTION_SERVO_GROUP_MOVE      2
 #define ACTION_DOME_ALL_OPEN         5
 #define ACTION_DOME_ALL_CLOSE        6
 #define ACTION_DOME_WAVE             7
+#define ACTION_FRONT_ARM_FLAIL       8
+#define ACTION_FRONT_CHARGE_TOGGLE   9
+#define ACTION_FRONT_DATA_TOGGLE     10
+#define ACTION_REAR_TOP_TOGGLE       11
+#define ACTION_REAR_TOP_OPEN         12
+#define ACTION_REAR_TOP_CLOSE        13
+#define ACTION_STATUS_UPDATE         0x40
 #define ACTION_STEALTH_PLAY_SOUND    0x30
 
 #define GROUP_ALL_SERVOS 255
@@ -261,6 +270,36 @@ bool sendCommand(uint8_t destinationNode,
   return ok;
 }
 
+void sendStatusToPi(uint8_t stealthCommand, uint8_t statusValue, uint8_t destinationNode, bool ok) {
+  PanelCommand status;
+  status.actionType = ACTION_STATUS_UPDATE;
+  status.targetGroup = stealthCommand;
+  status.position = statusValue;
+  status.reserved = ok ? destinationNode : 0;
+
+  Serial.print("Sending status update to Pi for STEALTH cmd 0x");
+  Serial.print(stealthCommand, HEX);
+  Serial.print(" status ");
+  Serial.print(statusValue);
+  Serial.print(" result ");
+  Serial.println(ok ? "SUCCESS" : "FAILED");
+
+  manager.sendtoWait((uint8_t *)&status, sizeof(status), PI_RADIO_NODE);
+  rf69.setModeRx();
+}
+
+void sendAndReport(uint8_t stealthCommand,
+                   const char* label,
+                   uint8_t destinationNode,
+                   uint8_t actionType,
+                   uint8_t targetGroup,
+                   uint8_t position,
+                   uint8_t statusValue) {
+  bool ok = sendCommand(destinationNode, actionType, targetGroup, position);
+  oledStatus(label, ok ? "Radio success" : "Radio failed", "");
+  sendStatusToPi(stealthCommand, statusValue, destinationNode, ok);
+}
+
 void handleStealthI2CCommand(uint8_t command) {
   Serial.println();
   Serial.print("STEALTH I2C command received. DEC: ");
@@ -272,47 +311,63 @@ void handleStealthI2CCommand(uint8_t command) {
   snprintf(line2, sizeof(line2), "CMD 0x%02X", command);
   oledStatus("RX from STEALTH", line2, "Alt I2C D11/D13");
 
-  bool ok = false;
-
   switch (command) {
     case STEALTH_CMD_FRONT_ALL_OPEN:
-      ok = sendCommand(FRONT_RADIO_NODE, ACTION_SERVO_GROUP_MOVE, GROUP_ALL_SERVOS, SERVO_POS_OPEN);
-      oledStatus("Front Open", ok ? "Radio success" : "Radio failed", "");
+      sendAndReport(command, "Front Open", FRONT_RADIO_NODE, ACTION_SERVO_GROUP_MOVE, GROUP_ALL_SERVOS, SERVO_POS_OPEN, SERVO_POS_OPEN);
       break;
 
     case STEALTH_CMD_FRONT_ALL_CLOSE:
-      ok = sendCommand(FRONT_RADIO_NODE, ACTION_SERVO_GROUP_MOVE, GROUP_ALL_SERVOS, SERVO_POS_CLOSED);
-      oledStatus("Front Close", ok ? "Radio success" : "Radio failed", "");
+      sendAndReport(command, "Front Close", FRONT_RADIO_NODE, ACTION_SERVO_GROUP_MOVE, GROUP_ALL_SERVOS, SERVO_POS_CLOSED, SERVO_POS_CLOSED);
       break;
 
     case STEALTH_CMD_REAR_ALL_OPEN:
-      ok = sendCommand(REAR_RADIO_NODE, ACTION_SERVO_GROUP_MOVE, GROUP_ALL_SERVOS, SERVO_POS_OPEN);
-      oledStatus("Rear Open", ok ? "Radio success" : "Radio failed", "");
+      sendAndReport(command, "Rear Open", REAR_RADIO_NODE, ACTION_SERVO_GROUP_MOVE, GROUP_ALL_SERVOS, SERVO_POS_OPEN, SERVO_POS_OPEN);
       break;
 
     case STEALTH_CMD_REAR_ALL_CLOSE:
-      ok = sendCommand(REAR_RADIO_NODE, ACTION_SERVO_GROUP_MOVE, GROUP_ALL_SERVOS, SERVO_POS_CLOSED);
-      oledStatus("Rear Close", ok ? "Radio success" : "Radio failed", "");
+      sendAndReport(command, "Rear Close", REAR_RADIO_NODE, ACTION_SERVO_GROUP_MOVE, GROUP_ALL_SERVOS, SERVO_POS_CLOSED, SERVO_POS_CLOSED);
       break;
 
     case STEALTH_CMD_DOME_ALL_OPEN:
-      ok = sendCommand(DOME_RADIO_NODE, ACTION_DOME_ALL_OPEN, GROUP_ALL_SERVOS, SERVO_POS_OPEN);
-      oledStatus("Dome Open", ok ? "Radio success" : "Radio failed", "");
+      sendAndReport(command, "Dome Open", DOME_RADIO_NODE, ACTION_DOME_ALL_OPEN, GROUP_ALL_SERVOS, SERVO_POS_OPEN, SERVO_POS_OPEN);
       break;
 
     case STEALTH_CMD_DOME_ALL_CLOSE:
-      ok = sendCommand(DOME_RADIO_NODE, ACTION_DOME_ALL_CLOSE, GROUP_ALL_SERVOS, SERVO_POS_CLOSED);
-      oledStatus("Dome Close", ok ? "Radio success" : "Radio failed", "");
+      sendAndReport(command, "Dome Close", DOME_RADIO_NODE, ACTION_DOME_ALL_CLOSE, GROUP_ALL_SERVOS, SERVO_POS_CLOSED, SERVO_POS_CLOSED);
       break;
 
     case STEALTH_CMD_DOME_WAVE:
-      ok = sendCommand(DOME_RADIO_NODE, ACTION_DOME_WAVE, GROUP_ALL_SERVOS, 0);
-      oledStatus("Dome Wave", ok ? "Radio success" : "Radio failed", "");
+      sendAndReport(command, "Dome Wave", DOME_RADIO_NODE, ACTION_DOME_WAVE, GROUP_ALL_SERVOS, 0, 0);
+      break;
+
+    case STEALTH_CMD_ARM_FLAIL:
+      sendAndReport(command, "Arm Flail", FRONT_RADIO_NODE, ACTION_FRONT_ARM_FLAIL, 0, 0, 0);
+      break;
+
+    case STEALTH_CMD_CHARGE_TOGGLE:
+      sendAndReport(command, "Charge Toggle", FRONT_RADIO_NODE, ACTION_FRONT_CHARGE_TOGGLE, 2, 0, 0);
+      break;
+
+    case STEALTH_CMD_DATA_TOGGLE:
+      sendAndReport(command, "Data Toggle", FRONT_RADIO_NODE, ACTION_FRONT_DATA_TOGGLE, 6, 0, 0);
+      break;
+
+    case STEALTH_CMD_REAR_TOP_TOGGLE:
+      sendAndReport(command, "Rear Top Toggle", REAR_RADIO_NODE, ACTION_REAR_TOP_TOGGLE, 2, 0, 0);
+      break;
+
+    case STEALTH_CMD_REAR_TOP_OPEN:
+      sendAndReport(command, "Rear Top Open", REAR_RADIO_NODE, ACTION_REAR_TOP_OPEN, 2, SERVO_POS_OPEN, SERVO_POS_OPEN);
+      break;
+
+    case STEALTH_CMD_REAR_TOP_CLOSE:
+      sendAndReport(command, "Rear Top Close", REAR_RADIO_NODE, ACTION_REAR_TOP_CLOSE, 2, SERVO_POS_CLOSED, SERVO_POS_CLOSED);
       break;
 
     default:
       Serial.println("No mapped action for this STEALTH I2C command.");
       oledStatus("Unknown STEALTH", line2, "No mapped action");
+      sendStatusToPi(command, 0, 0, false);
       break;
   }
 
