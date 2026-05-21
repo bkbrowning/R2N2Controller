@@ -279,50 +279,50 @@ def apply_body_status_update(body):
     status_text = {0: "triggered", SERVO_POS_OPEN: "open", SERVO_POS_CLOSED: "closed"}.get(status_value, str(status_value))
 
     command_labels = {
-        0x16: "Front Open",
-        0x17: "Front Close",
-        0x18: "Rear Open",
-        0x19: "Rear Close",
-        0x20: "Dome Open",
-        0x21: "Dome Close",
-        0x22: "Dome Wave",
-        0x23: "Arm Flail",
-        0x24: "Charge Bay Toggle",
-        0x25: "Data Panel Toggle",
+        0x10: "Front Open",
+        0x11: "Front Close",
+        0x12: "Rear Open",
+        0x13: "Rear Close",
+        0x14: "Dome Open",
+        0x15: "Dome Close",
+        0x16: "Dome Wave",
+        0x17: "Arm Flail",
+        0x18: "Charge Bay Toggle",
+        0x19: "Data Panel Toggle",
         0x26: "Rear Top Toggle",
-        0x27: "Rear Top Open",
-        0x28: "Rear Top Close",
+        0x1B: "Rear Top Open",
+        0x1C: "Rear Top Close",
     }
 
-    if stealth_cmd == 0x16:
+    if stealth_cmd == 0x10:
         state["front"] = "open"
         state["charge_bay"] = "open"
         state["data_panel"] = "open"
-    elif stealth_cmd == 0x17:
+    elif stealth_cmd == 0x11:
         state["front"] = "closed"
         state["charge_bay"] = "closed"
         state["data_panel"] = "closed"
-    elif stealth_cmd == 0x18:
+    elif stealth_cmd == 0x12:
         state["rear"] = "open"
         state["rear_top"] = "open"
-    elif stealth_cmd == 0x19:
+    elif stealth_cmd == 0x13:
         state["rear"] = "closed"
         state["rear_top"] = "closed"
-    elif stealth_cmd == 0x20:
+    elif stealth_cmd == 0x14:
         state["dome"] = "open"
-    elif stealth_cmd == 0x21:
+    elif stealth_cmd == 0x15:
         state["dome"] = "closed"
-    elif stealth_cmd == 0x22:
+    elif stealth_cmd == 0x16:
         state["dome"] = "wave"
-    elif stealth_cmd == 0x24:
+    elif stealth_cmd == 0x18:
         state["charge_bay"] = "open" if state["charge_bay"] != "open" else "closed"
-    elif stealth_cmd == 0x25:
+    elif stealth_cmd == 0x19:
         state["data_panel"] = "open" if state["data_panel"] != "open" else "closed"
     elif stealth_cmd == 0x26:
         state["rear_top"] = "open" if state["rear_top"] != "open" else "closed"
-    elif stealth_cmd == 0x27:
+    elif stealth_cmd == 0x1B:
         state["rear_top"] = "open"
-    elif stealth_cmd == 0x28:
+    elif stealth_cmd == 0x1C:
         state["rear_top"] = "closed"
 
     label = command_labels.get(stealth_cmd, f"STEALTH 0x{stealth_cmd:02X}")
